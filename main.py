@@ -1,4 +1,5 @@
 # Team SPY | DEVGAGAN
+# https://github.com/timgahmen/Save-Restricted-Content-Bot-with-Login
 
 import logging,os,time,json,telethon,asyncio,re
 from telethon import TelegramClient, events
@@ -17,10 +18,12 @@ API_HASH = os.getenv("TG_API_HASH", "1fda88a5d1de478bce198e")
 BOT_TOKEN = os.getenv("BOT_TOKEN", "token")
 MONGODB_URL = os.getenv("MONGODB_URL", "mongouri")
 BOT_USERNAME = None
+
 bot = TelegramClient('bot', API_ID, API_HASH).start(bot_token=BOT_TOKEN)
 mongo_client = MongoClient(MONGODB_URL, server_api=ServerApi('1'))
 download_folder = 'files'
 database = mongo_client.userdb.sessions
+
 if not os.path.isdir(download_folder):
     os.makedirs(download_folder)
 numpad = [
@@ -61,21 +64,25 @@ def select_not_none(l):
     for i in l:
         if i is not None:
             return i
+
 def intify(s):
     try:
         return int(s)
     except:
         return s
+
 def get(obj, key, default=None):
     try:
         return obj[key]
     except:
         return default
+
 def yesno(x,page='def'):
     return [
         [Button.inline("Yes", '{{"page":"{}","press":"yes{}"}}'.format(page,x))],
         [Button.inline("No", '{{"page":"{}","press":"no{}"}}'.format(page,x))]
     ]
+
 async def handle_usr(contact, event):
     msg = await event.respond(strings['sending1'], buttons=Button.clear())
     await msg.delete()
@@ -99,6 +106,7 @@ async def handle_usr(contact, event):
     except Exception as e:
         await msg.edit("Error: "+repr(e))
     await uclient.disconnect()
+
 async def handle_settings(event, jdata):
     user_data = database.find_one({"chat_id": event.chat_id})
     settings = get(user_data, 'settings', {})
@@ -162,6 +170,7 @@ async def handle_settings(event, jdata):
     print('updated: ', settings)
     database.update_one({'_id': user_data['_id']}, {'$set': {'settings': settings}})
     await event.edit(text, buttons=buttons)
+
 async def sign_in(event):
     try:
         user_data = database.find_one({"chat_id": event.chat_id})
@@ -205,17 +214,20 @@ async def sign_in(event):
     data['login'] = json.dumps(login)
     database.update_one({'_id': user_data['_id']}, {'$set': data})
     return True
+
 class TimeKeeper:
     last = ''
     last_edited_time = 0
     def __init__(self, status):
         self.status = status
+
 async def get_gallery(client, chat, msg_id):
     msgs = await client.get_messages(chat, ids=[*range(msg_id - 9, msg_id + 10)])
     return [
         msg for msg in [i for i in msgs if i] # clean None
         if msg.grouped_id == msgs[9].grouped_id # 10th msg is target, guaranteed to exist
     ]
+
 def progress_bar(percentage):
     prefix_char = '█'
     suffix_char = '▒'
@@ -223,11 +235,13 @@ def progress_bar(percentage):
     prefix = round(percentage/progressbar_length) * prefix_char
     suffix = (progressbar_length-round(percentage/progressbar_length)) * suffix_char
     return f"{prefix}{suffix} {percentage:.2f}%"
+
 def humanify(byte_size):
     siz_list = ['KB', 'MB', 'GB']
     for i in range(len(siz_list)):
         if byte_size/1024**(i+1) < 1024:
             return "{} {}".format(round(byte_size/1024**(i+1), 2), siz_list[i])
+
 async def callback(current, total, tk, message):
     try:
         progressbar = progress_bar(current/total*100)
@@ -240,6 +254,7 @@ async def callback(current, total, tk, message):
             tk.last_edited_time = time.time()
     except:
         pass
+
 async def unrestrict(uclient, event, chat, msg, log):
     to_chat = await event.get_sender()
     if msg is None:
@@ -273,6 +288,7 @@ async def unrestrict(uclient, event, chat, msg, log):
         await bot.send_message(to_chat, msg.message)
     await uclient.disconnect()
     await log.delete()
+
 @events.register(events.NewMessage(outgoing=True))
 async def dl_getter(event):
     user_data = database.find_one({"chat_id": event.message.from_id.user_id})
@@ -311,6 +327,7 @@ async def handler(event):
     if event.message.text in direct_reply:
         await event.respond(direct_reply[event.message.text])
         raise events.StopPropagation
+
 @bot.on(events.NewMessage(pattern=r"/login", func=lambda e: e.is_private))
 async def handler(event):
     user_data = database.find_one({"chat_id": event.chat_id})
@@ -319,11 +336,13 @@ async def handler(event):
         raise events.StopPropagation
     await event.respond(strings['ask_phone'], buttons=[Button.request_phone("SHARE CONTACT", resize=True, single_use=True)])
     raise events.StopPropagation
+
 @bot.on(events.NewMessage(pattern=r"/settings", func=lambda e: e.is_private))
 async def handler(event):
     user_data = database.find_one({"chat_id": event.chat_id})
     await event.reply(strings['settings_home'], buttons=settings_keyboard)
     raise events.StopPropagation
+
 @bot.on(events.NewMessage(pattern=r"/logout", func=lambda e: e.is_private))
 async def handler(event):
     user_data = database.find_one({"chat_id": event.chat_id})
@@ -332,6 +351,7 @@ async def handler(event):
         raise events.StopPropagation
     await event.respond(strings['logout_sure'], buttons=yesno('logout'))
     raise events.StopPropagation
+
 @bot.on(events.NewMessage(pattern=r"/add_session", func=lambda e: e.is_private))
 async def handler(event):
     args = event.message.text.split(' ', 1)
@@ -352,6 +372,7 @@ async def handler(event):
     await msg.edit(strings['str_session_ok'])
     database.update_one({'_id': user_data['_id']}, {'$set': data})
     raise events.StopPropagation
+
 @bot.on(events.NewMessage(func=lambda e: e.is_private))
 async def handler(event):
     if event.message.contact:
@@ -360,6 +381,7 @@ async def handler(event):
         else:
             await event.respond(strings['wrong_phone'])
         raise events.StopPropagation
+
 @bot.on(events.CallbackQuery(func=lambda e: e.is_private))
 async def handler(event):
     try:
@@ -407,6 +429,7 @@ async def handler(event):
         return
     elif not await sign_in(event):
         await event.edit(strings['ask_code']+login['code'], buttons=numpad)
+
 @bot.on(events.NewMessage(pattern="/activate", func=lambda e: e.is_private))
 async def handler(event):
     user_data = database.find_one({"chat_id": event.chat_id})
@@ -430,6 +453,7 @@ async def handler(event):
     await uclient.disconnect()
     database.update_one({'_id': user_data['_id']}, {'$set': {'activated': False}})
     await log.edit(strings['timed_out'])
+
 @bot.on(events.NewMessage(pattern=r"^(?:https?://t.me/c/(\d+)/(\d+)|https?://t.me/([A-Za-z0-9_]+)/(\d+)|(?:(-?\d+)\.(\d+)))$", func=lambda e: e.is_private))
 async def handler(event):
     corrected_private = None
@@ -461,6 +485,7 @@ async def handler(event):
         await unrestrict(uclient, event, chat, msg, log)
     except Exception as e:
         await event.respond(repr(e))
+
 @bot.on(events.NewMessage(func=lambda e: e.is_private))
 async def handler(event):
     user_data = database.find_one({"chat_id": event.chat_id})
